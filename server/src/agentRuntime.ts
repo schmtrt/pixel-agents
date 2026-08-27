@@ -84,11 +84,20 @@ export class AgentRuntime {
   readonly subagentWatch: SubagentWatch;
   private hookEventHandler: HookEventHandler;
   private lifecycleCallbacks: RuntimeLifecycleCallbacks = {};
+  /** Directory the server was launched from. Hooks-only providers (no
+   *  transcript to derive a project from) are adopted when their session cwd
+   *  sits inside this directory tree. */
+  private readonly launchDir: string;
 
   constructor(
     private readonly store: AgentStateStore,
     provider: HookProvider,
+    /** Additional hook providers (e.g. OpenCode) for event normalization. The
+     *  primary provider still owns file-watching / transcript fallback. */
+    extraProviders: readonly HookProvider[] = [],
   ) {
+    this.launchDir = process.cwd();
+
     // Wire module-level dependencies
     setDismissalTracker(this.dismissalTracker);
     setHookProvider(provider);
@@ -146,7 +155,10 @@ export class AgentRuntime {
       store,
       this.waitingTimers,
       this.permissionTimers,
-      provider,
+      new Map<string, HookProvider>([
+        [provider.id, provider],
+        ...extraProviders.map((p) => [p.id, p] as const),
+      ]),
       new SessionRouter(),
       this.watchAllSessions,
     );
@@ -192,7 +204,21 @@ export class AgentRuntime {
             }
           }
         }
-        if (!isTrackedProjectDir(projectDir) && !this.watchAllSessions.current) {
+        // Hooks-only sessions (OpenCode: no transcript path) carry their real
+        // working directory instead of a CLI-specific project path, so the
+        // exact-match tracked-dir check can't see them. Adopt them when they
+        // run from inside the server's launch directory — the operator started
+        // pixel-agents from the workspace they care about. Watch All Sessions
+        // remains the escape hatch for everything else.
+        const insideLaunchDir =
+          transcriptPath === undefined &&
+          typeof projectDir === 'string' &&
+          (projectDir === this.launchDir || projectDir.startsWith(this.launchDir + path.sep));
+        if (
+          !isTrackedProjectDir(projectDir) &&
+          !this.watchAllSessions.current &&
+          !insideLaunchDir
+        ) {
           console.log(
             `[Pixel Agents] Hook: external session ${sessionId.slice(0, 8)}... not adopted ` +
               `(project untracked, Watch All Sessions off)`,

@@ -8,6 +8,7 @@
  * Each connecting WebSocket client receives the full state on webviewReady.
  */
 
+import * as fs from 'fs';
 import * as path from 'path';
 
 import { AgentRuntime } from './agentRuntime.js';
@@ -27,7 +28,14 @@ import {
 } from './configPersistence.js';
 import { MAX_PORT, MIN_PORT } from './constants.js';
 import { FileStateAdapter } from './fileStateAdapter.js';
-import { claudeProvider, copyHookScript, hookProviderById } from './providers/index.js';
+import {
+  claudeProvider,
+  copyHookScript,
+  copyOpencodePluginScript,
+  getOpencodeConfigHome,
+  hookProviderById,
+  opencodeProvider,
+} from './providers/index.js';
 import { PixelAgentsServer } from './server.js';
 
 // ── Argument parsing ──────────────────────────────────────────
@@ -101,6 +109,18 @@ function copyHookScriptOrReport(packageRoot: string, context = ''): boolean {
   return false;
 }
 
+/**
+ * Copy the bundled OpenCode plugin into ~/.config/opencode/plugin/, reporting
+ * failure. Same contract as copyHookScriptOrReport: opencode auto-loads the
+ * file, so installing a consent grant without the file in place would
+ * silently do nothing.
+ */
+function copyOpencodePluginOrReport(packageRoot: string, context = ''): boolean {
+  if (copyOpencodePluginScript(packageRoot)) return true;
+  console.error(`[Pixel Agents] OpenCode plugin NOT installed${context}: bundled plugin missing.`);
+  return false;
+}
+
 // ── Main ──────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -143,7 +163,7 @@ async function main(): Promise<void> {
 
   try {
     // Create runtime first (before server.start, so we can pass it in)
-    const runtime = new AgentRuntime(store, claudeProvider);
+    const runtime = new AgentRuntime(store, claudeProvider, [opencodeProvider]);
 
     // Wire hook events: HTTP POST -> runtime -> hookEventHandler -> agents
     server.onHookEvent((providerId, event) => {
@@ -167,6 +187,12 @@ async function main(): Promise<void> {
         if (
           provider.id === claudeProvider.id &&
           !copyHookScriptOrReport(packageRoot, ' (user toggle)')
+        ) {
+          return;
+        }
+        if (
+          provider.id === opencodeProvider.id &&
+          !copyOpencodePluginOrReport(packageRoot, ' (user toggle)')
         ) {
           return;
         }
@@ -280,6 +306,32 @@ async function main(): Promise<void> {
       console.log(
         '[Pixel Agents] Hooks disabled — enable "Instant Detection (Hooks)" in the UI settings to install them.',
       );
+    }
+
+    // OpenCode hooks: the plugin file under ~/.config/opencode/plugin/ is an
+    // independent, per-provider consent/install pair (same discipline as
+    // Claude above — silent grant when already on disk, one-time approval
+    // otherwise). Only surface this on the console when opencode is actually
+    // installed (its config home exists) — otherwise the line is noise for
+    // users who have no business with the provider.
+    if (getHooksEnabled(opencodeProvider.id) && fs.existsSync(getOpencodeConfigHome())) {
+      let opencodeConsent = getHooksConsent(opencodeProvider.id) === 'granted';
+      if (!opencodeConsent && (await opencodeProvider.areHooksInstalled())) {
+        grantHooksConsent(opencodeProvider.id);
+        opencodeConsent = true;
+      }
+      if (!opencodeConsent) {
+        console.log(
+          '[Pixel Agents] OpenCode plugin not installed: installing into ~/.config/opencode/plugin/ needs one-time approval — open the URL below to review and approve it.',
+        );
+      } else if (copyOpencodePluginOrReport(packageRoot)) {
+        try {
+          await opencodeProvider.installHooks(`http://127.0.0.1:${config.port}`, config.token);
+          console.log('[Pixel Agents] OpenCode plugin installed');
+        } catch (err) {
+          console.error(`[Pixel Agents] ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
     }
 
     // Start scanning for external sessions (Claude running in user's terminal)

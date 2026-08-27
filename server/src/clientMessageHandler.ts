@@ -359,11 +359,19 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
   const { store, runtime, cache } = ctx;
   const adapter = store.getAdapter();
 
-  // 1. Provider capabilities (must arrive before any agent messages)
+  // 1. Provider capabilities (must arrive before any agent messages). Merged
+  // across ALL bundled providers — the webview uses these sets for animation
+  // and subtask detection regardless of which CLI an agent came from.
+  const readingTools = new Set<string>();
+  const subagentToolNames = new Set<string>();
+  for (const provider of hookProviders) {
+    for (const tool of provider.readingTools) readingTools.add(tool);
+    for (const tool of provider.subagentToolNames) subagentToolNames.add(tool);
+  }
   send({
     type: 'providerCapabilities',
-    readingTools: [...claudeProvider.readingTools],
-    subagentToolNames: [...claudeProvider.subagentToolNames],
+    readingTools: [...readingTools],
+    subagentToolNames: [...subagentToolNames],
   });
 
   // 2. Assets (from server cache, loaded at startup via pngjs)

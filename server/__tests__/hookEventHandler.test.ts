@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { HookProvider } from '../../core/src/provider.js';
 import { AgentStateStore } from '../src/agentStateStore.js';
 import { HookEventHandler } from '../src/hookEventHandler.js';
 import { claudeProvider } from '../src/providers/hook/claude/claude.js';
@@ -65,7 +66,7 @@ describe('HookEventHandler', () => {
       agents,
       waitingTimers,
       permissionTimers,
-      claudeProvider,
+      new Map<string, HookProvider>([[claudeProvider.id, claudeProvider]]),
       new SessionRouter(),
     );
   });

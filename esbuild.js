@@ -39,7 +39,7 @@ function copyAssets() {
  * Produces a self-contained CJS file with shebang for Claude Code to execute.
  */
 function buildHooks() {
-  const entry = path.join(
+  const claudeEntry = path.join(
     __dirname,
     'server',
     'src',
@@ -49,16 +49,47 @@ function buildHooks() {
     'hooks',
     'claude-hook.ts',
   );
-  if (!fs.existsSync(entry)) return;
-  require('esbuild').buildSync({
-    entryPoints: [entry],
-    bundle: true,
-    platform: 'node',
-    target: 'node18',
-    format: 'cjs',
-    outdir: path.join(__dirname, 'dist', 'hooks'),
-    banner: { js: '#!/usr/bin/env node' },
-  });
+  if (fs.existsSync(claudeEntry)) {
+    // Claude Code executes this file with `node`, so it must be CJS with a
+    // shebang.
+    require('esbuild').buildSync({
+      entryPoints: [claudeEntry],
+      bundle: true,
+      platform: 'node',
+      target: 'node18',
+      format: 'cjs',
+      outdir: path.join(__dirname, 'dist', 'hooks'),
+      banner: { js: '#!/usr/bin/env node' },
+    });
+  }
+
+  // The OpenCode plugin is IMPORTED by opencode (Bun) as an ESM module whose
+  // default export is a PluginModule ({ id, server }) — see
+  // server/src/providers/hook/opencode/hooks/opencode-plugin.ts.
+  const opencodeEntry = path.join(
+    __dirname,
+    'server',
+    'src',
+    'providers',
+    'hook',
+    'opencode',
+    'hooks',
+    'opencode-plugin.ts',
+  );
+  if (fs.existsSync(opencodeEntry)) {
+    require('esbuild').buildSync({
+      entryPoints: [opencodeEntry],
+      bundle: true,
+      platform: 'node',
+      target: 'node18',
+      format: 'esm',
+      outdir: path.join(__dirname, 'dist', 'hooks'),
+      // esbuild strips source comments; the installer identifies "our" file at
+      // the target path via this banner (OPENCODE_PLUGIN_MARKER).
+      banner: { js: '/* pixel-agents opencode plugin */' },
+    });
+  }
+
   console.log('✓ Built hooks/ → dist/hooks/');
 }
 

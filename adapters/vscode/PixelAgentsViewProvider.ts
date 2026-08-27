@@ -50,6 +50,7 @@ import {
   copyHookScript,
   hookProviderById,
   hookProviders,
+  opencodeProvider,
 } from '../../server/src/providers/index.js';
 import { PixelAgentsServer } from '../../server/src/server.js';
 import {
@@ -179,7 +180,7 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
     });
 
     // Create shared runtime (owns timer Maps, scanners, hook handler, dismissal tracker)
-    this.runtime = new AgentRuntime(this.store, claudeProvider);
+    this.runtime = new AgentRuntime(this.store, claudeProvider, [opencodeProvider]);
 
     this.initServer();
   }

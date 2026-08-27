@@ -129,7 +129,11 @@ describe('clientMessageHandler: hooks consent flow', () => {
       grantHooksConsent('claude');
       await connect();
 
-      expect(sent.find((m) => m.type === 'hooksConsentRequest')).toBeUndefined();
+      // Claude is the provider under test; opencode (a second bundled
+      // provider) may still be asked independently of claude's consent.
+      expect(
+        sent.find((m) => m.type === 'hooksConsentRequest' && m.providerId === 'claude'),
+      ).toBeUndefined();
     });
 
     // The silent-grant population (a pre-consent version's install, migrated at
@@ -139,7 +143,9 @@ describe('clientMessageHandler: hooks consent flow', () => {
       seedInstalledHooks();
       await connect();
 
-      expect(sent.find((m) => m.type === 'hooksConsentRequest')).toBeUndefined();
+      expect(
+        sent.find((m) => m.type === 'hooksConsentRequest' && m.providerId === 'claude'),
+      ).toBeUndefined();
     });
 
     it('never asks while the hooks preference is off', async () => {
@@ -148,7 +154,9 @@ describe('clientMessageHandler: hooks consent flow', () => {
       setHooksEnabled('claude', false);
       await connect();
 
-      expect(sent.find((m) => m.type === 'hooksConsentRequest')).toBeUndefined();
+      expect(
+        sent.find((m) => m.type === 'hooksConsentRequest' && m.providerId === 'claude'),
+      ).toBeUndefined();
     });
 
     // Not-now writes nothing, so the gate must still be open on the next
