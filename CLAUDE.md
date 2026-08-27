@@ -196,7 +196,7 @@ Adding a new CLI integration is one subdirectory under `server/src/providers/hoo
 
 `core/asyncapi.yaml` is the contract. Pinned to **3.0.0** because `@asyncapi/modelina@5.10.1` declares `supportedVersions: ['3.0.0']` only; bumping to 3.1.0 produces `export type Root = any`. Revisit when Modelina ships 3.1.0 support.
 
-- **27 ServerMessage variants** (server → client): agent lifecycle, agent activity, sub-agent activity, team + context usage, assets, settings + workspace, diagnostics.
+- **28 ServerMessage variants** (server → client): agent lifecycle, agent activity, sub-agent activity, team + model + context usage, assets, settings + workspace, diagnostics.
 - **18 ClientMessage variants** (client → server): lifecycle (`webviewReady`, `launchAgent`, `focusAgent`, `closeAgent`), layout (`saveAgentSeats`, `saveLayout`, `exportLayout`, `importLayout`), settings (`setSoundEnabled`, `setHooksEnabled`, `setWatchAllSessions`, `setAlwaysShowLabels`, `setHooksInfoShown`, `setLastSeenVersion`), discovery + assets, diagnostics.
 
 Both unions use `oneOf` with `discriminator: type`. Every concrete message sets `additionalProperties: false`.
@@ -372,6 +372,15 @@ Every agent's context gauge. Fed from `message.usage` on assistant records by `p
 - **The window comes from the provider**, not from the runtime: `HookProvider.contextWindowForModel(model)` (Claude: 1M for the current line, 200k for Haiku and the older models, `undefined` for ids it can't place). Transcripts state usage but never the limit, and guessing 200k for a 1M model reads five times too full. `widenContextWindow` is the backstop for unrecognized models and unknown-larger windows — it only ever widens, since a context that doesn't fit disproves the assumption while a shrinking one proves nothing.
 - **`seedContextUsage` runs once per agent in `startFileWatching`** — the single seam every watched agent passes through. Agents adopted or restored mid-session start at end-of-file, so without a tail read they'd have no gauge until their next turn.
 - Sub-agents get no gauge: no session of their own, and the shadow store never forwards `agentContextUsage`.
+
+### Model badge
+
+Which model serves a session, as a short colored badge on the character's nameplate (CLAUDE / QWEN / GEMINI / ...).
+
+- **Claude**: learned server-side from JSONL assistant records (`message.model`) in `updateContextUsage`, gated by the same positional sidechain rule as the context gauge; `<synthetic>` ids are ignored.
+- **OpenCode (hooks-only)**: the plugin learns `providerID`/`modelID` from bus message events (best-effort, last-wins per session) and reports the combined id on `TurnEnd`; the normalizer passes `model` through, `hookEventHandler` applies it.
+- **Wire**: `agentModel { id, model }` ServerMessage, broadcast on first learn and on mid-session model change; re-sent by `resendAgentActivity` so the badge survives webview reconnects. Not persisted — like the context gauge, it reappears at the next turn after a server restart.
+- **UI**: raw model id on `Character.model`; `modelBadge()` (webview-ui/src/office/modelBadge.ts, pure + unit-tested) maps family keywords to short labels with a truncated last-path-segment fallback; badge colors live in `constants.ts` (`MODEL_BADGE_COLORS`). Rendered in `ToolOverlay` under the folder line.
 
 ## Office UI
 

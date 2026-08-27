@@ -42,6 +42,7 @@ The architecture is fully agent-agnostic and editor-agnostic: a typed `HookProvi
 - **Speech bubbles** — visual indicators when an agent is waiting for input or awaiting permission
 - **Sound notifications** — optional chimes when an agent finishes its turn or requests permission
 - **Sub-agents and Agent Teams** — see ephemeral sub-agents and persistent Claude teammates as separate characters, including team roles and lifecycle changes
+- **Model badges** — each character shows a colored badge for the model serving its session (Claude, Qwen, Gemini, ...), so you can see at a glance who is behind which agent
 - **Persistent layouts** — your office design is saved and shared across VS Code windows
 - **Shared layout and assets** — import/export layouts and load external character, pet, and furniture packs
 - **Areas** — paint named areas onto the office, map workspace folders to them, and new agents sit inside the areas mapped to their folder
