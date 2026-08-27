@@ -2,6 +2,8 @@
 
 Pixel art office where AI agents (Claude Code and OpenCode sessions today, any tool tomorrow) become animated characters. Ships as a **VS Code extension** and an **`npx pixel-agents` standalone CLI** from the same source tree.
 
+This tree is the `schmtrt/pixel-agents` fork (branch `agent-hq`, based on upstream v1.4.1). Fork-specific extensions — OpenCode provider, hooks-only idle reaper, session-mapping fix, model badge — are listed in the README under "Fork Extensions (schmtrt)".
+
 `CONTEXT.md` is the canonical glossary — read it for what terms like Agent, Sub-agent, Teammate, Lead, Adopt, or Headless agent mean here, and use its vocabulary in code, comments, and docs.
 
 ## Architecture

@@ -52,6 +52,15 @@ The architecture is fully agent-agnostic and editor-agnostic: a typed `HookProvi
   <img src="webview-ui/public/characters.png" alt="Pixel Agents characters" width="320" height="72" style="image-rendering: pixelated;">
 </p>
 
+## Fork Extensions (schmtrt)
+
+This fork extends upstream [`pixel-agents-hq/pixel-agents`](https://github.com/pixel-agents-hq/pixel-agents) (base: v1.4.1, branch `agent-hq`):
+
+- **OpenCode provider** — OpenCode sessions become office agents through a hooks-only integration: a plugin (auto-installed to `~/.config/opencode/plugin/`) forwards session/tool/permission events to the server. OpenCode keeps no per-session transcript files, so this provider has no JSONL fallback — all state comes from hooks.
+- **OpenCode: only active agents stay in the office** — hooks-only sessions have no reliable `SessionEnd`, so an idle reaper removes agents that produced no hook event for 5 minutes; sessions that were already running before the server started are adopted via the plugin's first-contact announcement instead of expiring in the event buffer.
+- **OpenCode: no dangling session mappings after reap** — reaping now also clears the session→agent router entry, so a reaped agent's next event re-adopts it instead of being silently dropped.
+- **Model badges** — each character shows a colored badge for the model serving its session (Claude, Qwen, Gemini, ...). Claude reports it from its transcripts; OpenCode reports `provider/model` on turn end. New protocol message: `agentModel`.
+
 ## Where This Is Going
 
 The vision is: play a game, build a product. Two goals follow from it: to build a familiar, intuitive interface for running and orchestrating a lot of agents; and to make the hours you spend doing it feel less like administration and more like play.
