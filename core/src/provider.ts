@@ -30,6 +30,9 @@ export type AgentEvent =
        *  its response (Stop). Drives the "Waiting for input" vs "Done" label.
        *  Absent/false = the agent finished its turn (Done). */
       awaitingInput?: boolean;
+      /** Model serving the session (provider/model id as the provider reports
+       *  it). Set when the provider knows it; the office shows it as a badge. */
+      model?: string;
     }
   | {
       kind: 'subagentStart';

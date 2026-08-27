@@ -108,9 +108,20 @@ export function updateContextUsage(
   record: unknown,
   provider?: HookProvider | null,
 ): void {
+  const rec = record as TranscriptRecord | null;
+  const isSidechain = rec?.isSidechain === true;
+  // Learn the serving model from main-chain records (positional gate: once
+  // this file produced a main-chain turn, later sidechain records belong to
+  // someone else — same rule as the context gauge).
+  if (!isSidechain || !agent.sawMainChainUsage) {
+    const model = rec?.message?.model;
+    if (typeof model === 'string' && model && model !== '<synthetic>' && agent.model !== model) {
+      agent.model = model;
+      agents.broadcast({ type: 'agentModel', id: agentId, model });
+    }
+  }
   const tokens = extractContextTokens(record);
   if (tokens <= 0) return;
-  const isSidechain = (record as TranscriptRecord | null)?.isSidechain === true;
   if (isSidechain && agent.sawMainChainUsage) return;
   applyContextTokens(agentId, agent, agents, tokens, !isSidechain, windowFor(record, provider));
 }

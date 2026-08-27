@@ -126,7 +126,11 @@ function normalizeHookEvent(
       // session.idle = the agent finished its turn and is waiting for input.
       return {
         sessionId,
-        event: { kind: 'turnEnd', awaitingInput: raw.awaiting_input === true },
+        event: {
+          kind: 'turnEnd',
+          awaitingInput: raw.awaiting_input === true,
+          model: typeof raw.model === 'string' && raw.model ? raw.model : undefined,
+        },
       };
 
     case 'PermissionRequest':

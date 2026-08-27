@@ -51,13 +51,14 @@ function assistantRecord(
     cacheRead?: number;
     output?: number;
     isSidechain?: boolean;
+    model?: string;
   } = {},
 ): Record<string, unknown> {
   return {
     type: 'assistant',
     isSidechain: opts.isSidechain ?? false,
     message: {
-      model: 'claude-opus-5',
+      model: opts.model ?? 'claude-opus-5',
       usage: {
         input_tokens: opts.input ?? 2,
         cache_creation_input_tokens: opts.cacheCreation ?? 0,
@@ -152,6 +153,7 @@ describe('updateContextUsage', () => {
     updateContextUsage(1, agent, agents, assistantRecord({ cacheRead: 50_000, output: 300 }));
 
     expect(messages).toEqual([
+      { type: 'agentModel', id: 1, model: 'claude-opus-5' },
       {
         type: 'agentContextUsage',
         id: 1,
@@ -159,6 +161,37 @@ describe('updateContextUsage', () => {
         maxContextTokens: DEFAULT_MAX_CONTEXT_TOKENS,
       },
     ]);
+  });
+
+  it('broadcasts the serving model once, and again when the session switches models', () => {
+    updateContextUsage(1, agent, agents, assistantRecord({ cacheRead: 10_000 }));
+    updateContextUsage(1, agent, agents, assistantRecord({ cacheRead: 20_000 }));
+    expect(messages.filter((m) => m.type === 'agentModel')).toEqual([
+      { type: 'agentModel', id: 1, model: 'claude-opus-5' },
+    ]);
+
+    updateContextUsage(
+      1,
+      agent,
+      agents,
+      assistantRecord({ cacheRead: 30_000, model: 'claude-haiku-4-5-20251001' }),
+    );
+    expect(messages.filter((m) => m.type === 'agentModel')).toEqual([
+      { type: 'agentModel', id: 1, model: 'claude-opus-5' },
+      { type: 'agentModel', id: 1, model: 'claude-haiku-4-5-20251001' },
+    ]);
+    expect(agent.model).toBe('claude-haiku-4-5-20251001');
+  });
+
+  it('ignores <synthetic> model ids, which carry no model', () => {
+    updateContextUsage(
+      1,
+      agent,
+      agents,
+      assistantRecord({ cacheRead: 10_000, model: '<synthetic>' }),
+    );
+    expect(agent.model).toBeUndefined();
+    expect(messages.filter((m) => m.type === 'agentModel')).toHaveLength(0);
   });
 
   it('snapshots rather than accumulates: the gauge falls after a compaction', () => {
@@ -177,7 +210,7 @@ describe('updateContextUsage', () => {
     updateContextUsage(1, agent, agents, { type: 'user', message: { content: 'next prompt' } });
 
     expect(agent.contextTokens).toBe(50_002);
-    expect(messages).toHaveLength(1);
+    expect(messages).toHaveLength(2); // agentModel + contextUsage
   });
 
   it("ignores a lead's sidechain records -- those turns are its sub-agents'", () => {
@@ -185,7 +218,7 @@ describe('updateContextUsage', () => {
     updateContextUsage(1, agent, agents, assistantRecord({ cacheRead: 8_000, isSidechain: true }));
 
     expect(agent.contextTokens).toBe(120_002);
-    expect(messages).toHaveLength(1);
+    expect(messages).toHaveLength(2); // agentModel + contextUsage (sidechain ignored)
   });
 
   it("measures against the provider's window for the model that wrote the turn", () => {
@@ -243,7 +276,9 @@ describe('updateContextUsage', () => {
     updateContextUsage(1, agent, agents, assistantRecord({ cacheRead: 53_695, isSidechain: true }));
 
     expect(agent.contextTokens).toBe(53_697);
-    expect(messages).toHaveLength(2);
+    // Sidechain-only file: its records ARE the agent's own turns, so the model
+    // is learned from them too.
+    expect(messages).toHaveLength(3); // agentModel + 2× contextUsage
   });
 });
 

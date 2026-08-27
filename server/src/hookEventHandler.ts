@@ -475,6 +475,10 @@ export class HookEventHandler {
         // Handles Stop AND Notification(idle_prompt) -- both normalize to turnEnd.
         // awaitingInput discriminates them: idle_prompt sets it (-> "Waiting for
         // input"), Stop leaves it absent (-> "Done").
+        if (normEvent.model && agent.model !== normEvent.model) {
+          agent.model = normEvent.model;
+          this.agents.broadcast({ type: 'agentModel', id: agentId, model: normEvent.model });
+        }
         return this.handleStop(agent, agentId, normEvent.awaitingInput === true);
       case 'subagentTurnEnd':
         // Handles TeammateIdle AND TaskCompleted -- both normalize here. The normalized

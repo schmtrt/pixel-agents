@@ -16,6 +16,11 @@ export function resendAgentActivity(
   store: AgentStateStore,
 ): void {
   for (const [id, agent] of store) {
+    // 0. Model badge — identity info, like team info: before any activity.
+    if (agent.model) {
+      send({ type: 'agentModel', id, model: agent.model });
+    }
+
     // 1. Team metadata first — webview uses this to route tool messages correctly.
     // Derived teams (named background spawns) have a name and a lead link but NO
     // teamName, so gate on any team field.

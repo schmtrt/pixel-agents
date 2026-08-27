@@ -90,6 +90,28 @@ describe('opencodeProvider', () => {
       expect(result?.event).toEqual({ kind: 'turnEnd', awaitingInput: true });
     });
 
+    it('passes the model through on TurnEnd so the office can badge it', () => {
+      const result = opencodeProvider.normalizeHookEvent({
+        hook_event_name: 'TurnEnd',
+        session_id: 'ses_1',
+        awaiting_input: true,
+        model: 'qwen-vllm/RadixArk/Qwen3.8-27B',
+      });
+      expect(result?.event).toEqual({
+        kind: 'turnEnd',
+        awaitingInput: true,
+        model: 'qwen-vllm/RadixArk/Qwen3.8-27B',
+      });
+    });
+
+    it('leaves model absent on TurnEnd when the payload carries none', () => {
+      const result = opencodeProvider.normalizeHookEvent({
+        hook_event_name: 'TurnEnd',
+        session_id: 'ses_1',
+      });
+      expect((result?.event as { model?: string }).model).toBeUndefined();
+    });
+
     it('normalizes PermissionRequest', () => {
       const result = opencodeProvider.normalizeHookEvent({
         hook_event_name: 'PermissionRequest',

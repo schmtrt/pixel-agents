@@ -51,6 +51,11 @@ export interface AgentState {
    *  the PostToolUse-before-SubagentStart race); overwritten on the next PreToolUse. */
   currentHookIsTeammateSpawn?: boolean;
 
+  /** Model serving this session, as the provider reports it (claude: from the
+   *  JSONL `message.model`; opencode: from the plugin's TurnEnd payload).
+   *  Shown as a badge in the office. */
+  model?: string;
+
   // -- Context window usage (server/src/contextUsage.ts) --
   /** Tokens in the agent's context as of its newest turn; 0 until one is seen.
    *  A snapshot, not a running total -- it falls on compaction and /clear. */

@@ -1086,6 +1086,12 @@ export class OfficeState {
     ch.maxContextTokens = maxContextTokens;
   }
 
+  setAgentModel(id: number, model: string): void {
+    const ch = this.characters.get(id);
+    if (!ch) return;
+    ch.model = model;
+  }
+
   update(dt: number): void {
     // Furniture animation cycling
     const prevFrame = Math.floor(this.furnitureAnimTimer / FURNITURE_ANIM_INTERVAL_SEC);

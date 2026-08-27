@@ -99,6 +99,7 @@ components:
         # Agent Teams
         - $ref: '#/components/schemas/AgentTeamInfo'
         # Context window
+        - $ref: '#/components/schemas/AgentModel'
         - $ref: '#/components/schemas/AgentContextUsage'
         # Layout
         - $ref: '#/components/schemas/LayoutLoaded'
@@ -419,6 +420,24 @@ components:
           type: integer
         teamUsesTmux:
           type: boolean
+
+    AgentModel:
+      description: |
+        The model serving this agent's session, exactly as the provider
+        reports it (e.g. "claude-opus-4-1", "qwen-vllm/RadixArk/Qwen3.8-27B",
+        "gemini-2.5-flash"). Sent once when first learned and again if the
+        model changes mid-session. The webview maps it to a short badge.
+        Providers that do not report a model never send it.
+      type: object
+      additionalProperties: false
+      required: [type, id, model]
+      properties:
+        type:
+          const: agentModel
+        id:
+          type: integer
+        model:
+          type: string
 
     AgentContextUsage:
       description: |

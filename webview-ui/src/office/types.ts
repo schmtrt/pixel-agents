@@ -246,6 +246,11 @@ export interface Character {
   /** True when lead spawns teammates via tmux (run_in_background Agent calls) */
   teamUsesTmux?: boolean;
 
+  // -- Model badge --
+  /** Model serving this agent's session, as the server reports it. Shown as a
+   *  short badge (see modelBadge.ts); absent until first learned. */
+  model?: string;
+
   // -- Context gauge --
   /** Tokens in the agent's context as of its newest turn; 0 until reported.
    *  Sub-agents have no session of their own and stay at 0. */

@@ -24,6 +24,7 @@ export type ServerMessage =
   | SubagentClear
   | SubagentToolPermission
   | AgentTeamInfo
+  | AgentModel
   | AgentContextUsage
   | LayoutLoaded
   | FurnitureAssetsLoaded
@@ -179,6 +180,12 @@ export interface AgentTeamInfo {
   isTeamLead?: boolean;
   leadAgentId?: number;
   teamUsesTmux?: boolean;
+}
+
+export interface AgentModel {
+  type: 'agentModel';
+  id: number;
+  model: string;
 }
 
 export interface AgentContextUsage {

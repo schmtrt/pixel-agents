@@ -152,6 +152,21 @@ function postToServer(server: { port: number; token: string }, body: string): Pr
 /** Sessions this plugin instance already announced via SessionStart. */
 const announcedSessions = new Set<string>();
 
+/** Model learned per session from message events (`info.providerID/modelID`),
+ *  so TurnEnd can report who is serving the session. Best effort: unknown
+ *  event shapes simply add nothing. */
+const sessionModels = new Map<string, string>();
+
+function learnModel(props: Record<string, unknown>): void {
+  const info = isRecord(props['info']) ? props['info'] : undefined;
+  if (!info) return;
+  const sid = typeof info['sessionID'] === 'string' ? info['sessionID'] : undefined;
+  const provider = typeof info['providerID'] === 'string' ? info['providerID'] : '';
+  const model = typeof info['modelID'] === 'string' ? info['modelID'] : '';
+  if (!sid || !model) return;
+  sessionModels.set(sid, provider ? `${provider}/${model}` : model);
+}
+
 /** Ensure the server knows about a session: on first contact, send SessionStart
  *  (with the plugin's working directory) before the session's first real event.
  *  Sessions that were already running before the server (re)start would
@@ -200,6 +215,8 @@ const plugin = async (input?: PluginInput): Promise<PluginHooks> => {
         const props = isRecord(event['properties']) ? event['properties'] : undefined;
         if (!props) return;
 
+        learnModel(props);
+
         if (type === 'session.created') {
           const info = isRecord(props['info']) ? (props['info'] as SessionInfo) : undefined;
           if (info && typeof info.id === 'string') {
@@ -217,11 +234,13 @@ const plugin = async (input?: PluginInput): Promise<PluginHooks> => {
             session_id: props['sessionID'],
             hook_event_name: 'TurnEnd',
             awaiting_input: true,
+            model: sessionModels.get(props['sessionID']),
           });
         } else if (type === 'session.deleted') {
           const info = isRecord(props['info']) ? (props['info'] as SessionInfo) : undefined;
           if (info && typeof info.id === 'string') {
             await announceSession(info.id, cwd);
+            sessionModels.delete(info.id);
             emit({
               session_id: info.id,
               hook_event_name: 'SessionEnd',

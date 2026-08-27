@@ -13,12 +13,15 @@ import {
   CONTEXT_GAUGE_HEIGHT_PX,
   CONTEXT_GAUGE_WIDTH_PX,
   CONTEXT_WARN_THRESHOLD,
+  MODEL_BADGE_COLOR_DEFAULT,
+  MODEL_BADGE_COLORS,
   TEAM_LEAD_COLOR,
   TEAM_ROLE_COLOR,
   TOOL_OVERLAY_VERTICAL_OFFSET,
 } from '../../constants.js';
 import type { SubagentCharacter } from '../../hooks/useExtensionMessages.js';
 import type { OfficeState } from '../engine/officeState.js';
+import { modelBadge } from '../modelBadge.js';
 import { overlayProjection } from '../projection.js';
 import type { ToolActivity } from '../types.js';
 import { CharacterState } from '../types.js';
@@ -203,7 +206,8 @@ export function ToolOverlay({
 
         // Team info
         const teamRoleLabel = ch.isTeamLead ? 'LEAD' : ch.agentName || null;
-        const hasExtraLines = !!(ch.folderName || teamRoleLabel);
+        const modelBadgeText = modelBadge(ch.model);
+        const hasExtraLines = !!(ch.folderName || teamRoleLabel || modelBadgeText);
 
         // Context gauge. Every agent gets one — lead, teammate, adopted,
         // headless — as soon as it has taken a turn. Sub-agents never do: they
@@ -257,6 +261,18 @@ export function ToolOverlay({
                 {ch.folderName && (
                   <span className="text-2xs leading-none overflow-hidden text-ellipsis block">
                     {ch.folderName}
+                  </span>
+                )}
+                {modelBadgeText && (
+                  <span
+                    className="leading-none overflow-hidden text-ellipsis block"
+                    style={{
+                      fontSize: '14px',
+                      color: MODEL_BADGE_COLORS[modelBadgeText] ?? MODEL_BADGE_COLOR_DEFAULT,
+                    }}
+                    data-testid="model-badge"
+                  >
+                    {modelBadgeText.toUpperCase()}
                   </span>
                 )}
               </div>
