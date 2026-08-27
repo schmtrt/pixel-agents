@@ -378,6 +378,13 @@ export class HookEventHandler {
     }
 
     let agentId = this.sessionRouter.resolve(event.session_id);
+    if (agentId !== undefined && !this.agents.has(agentId)) {
+      // Dangling mapping (agent removed without unregistering its session):
+      // drop it so the unknown-session path (re-adoption/buffering) applies
+      // instead of silently dropping the event at agents.get() === undefined.
+      this.sessionRouter.unregister(event.session_id);
+      agentId = undefined;
+    }
     if (agentId === undefined) {
       for (const [id, agent] of this.agents) {
         if (agent.sessionId === event.session_id) {

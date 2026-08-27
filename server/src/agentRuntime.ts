@@ -517,6 +517,10 @@ export class AgentRuntime {
           `[Pixel Agents] Reaping idle hooks-only Agent ${id} (session ${agent.sessionId.slice(0, 8)}...)`,
         );
         this.reAdoptableSessions.set(agent.sessionId, { cwd: agent.projectDir, reapedAt: now });
+        // Drop the session mapping BEFORE removing the agent, or the next
+        // event resolves the dangling id, skips the re-adoption branch, and
+        // is silently dropped (agents.get() === undefined).
+        this.unregisterAgent(agent.sessionId);
         this.removeAgent(id);
       }
     }
