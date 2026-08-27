@@ -166,6 +166,7 @@ export const opencodeProvider: HookProvider = {
   id: 'opencode',
   displayName: 'OpenCode',
   protocolVersion: 1,
+  hooksOnly: true,
 
   normalizeHookEvent,
 

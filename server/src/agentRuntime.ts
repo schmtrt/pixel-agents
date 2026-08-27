@@ -14,7 +14,12 @@ import * as path from 'path';
 
 import type { HookProvider } from '../../core/src/provider.js';
 import type { AgentStateStore } from './agentStateStore.js';
-import { DEFAULT_MAX_CONTEXT_TOKENS } from './constants.js';
+import {
+  DEFAULT_MAX_CONTEXT_TOKENS,
+  HOOKS_ONLY_IDLE_TIMEOUT_MS,
+  HOOKS_ONLY_READOPT_WINDOW_MS,
+  HOOKS_ONLY_REAP_INTERVAL_MS,
+} from './constants.js';
 import { DismissalTracker } from './dismissalTracker.js';
 import {
   adoptExternalSessionFromHook,
@@ -73,6 +78,11 @@ export class AgentRuntime {
   readonly activeAgentId = { current: null as number | null };
   private externalScanTimer: ReturnType<typeof setInterval> | null = null;
   private staleCheckTimer: ReturnType<typeof setInterval> | null = null;
+  private reaperTimer: ReturnType<typeof setInterval> | null = null;
+  /** Sessions reaped by the hooks-only reaper: sessionId → last known cwd.
+   *  Consumed (destructive get) by HookEventHandler when the session's next
+   *  live event arrives, re-adopting the character. */
+  private readonly reAdoptableSessions = new Map<string, { cwd: string; reapedAt: number }>();
 
   // Configuration refs (mutable, shared with scanners)
   readonly watchAllSessions = { current: false };
@@ -288,6 +298,11 @@ export class AgentRuntime {
       onTeammateRemoved: (teammateAgentId) => {
         this.removeTeammate(teammateAgentId, 'hooks');
       },
+      getReAdoptableSession: (sessionId) => {
+        const entry = this.reAdoptableSessions.get(sessionId);
+        if (entry) this.reAdoptableSessions.delete(sessionId);
+        return entry;
+      },
       onSessionEnd: (agentId) => {
         const agent = this.store.get(agentId);
         if (!agent) return;
@@ -475,6 +490,41 @@ export class AgentRuntime {
     );
   }
 
+  /** Start the hooks-only idle reaper (OpenCode sessions: no transcript file,
+   *  no reliable SessionEnd). Idle characters leave the office after a grace
+   *  period and come back on the session's next event (re-adoption). */
+  startHooksOnlyReaper(): void {
+    if (this.reaperTimer) return;
+
+    this.reaperTimer = setInterval(
+      () => this.reapIdleHooksOnlyAgents(),
+      HOOKS_ONLY_REAP_INTERVAL_MS,
+    );
+  }
+
+  private reapIdleHooksOnlyAgents(): void {
+    const now = Date.now();
+    // First: bring back sessions that are actively sending hook events but
+    // never announced themselves (server (re)start / pre-announce plugin).
+    this.hookEventHandler.autoAdoptBufferedSessions(this.launchDir);
+    for (const [id, agent] of this.store) {
+      if (!agent.hooksOnly) continue;
+      const last = agent.lastHookAt ?? 0;
+      // last === 0 also covers agents restored from persistence: they were
+      // idle before this server start and must not survive the restart.
+      if (last === 0 || now - last > HOOKS_ONLY_IDLE_TIMEOUT_MS) {
+        console.log(
+          `[Pixel Agents] Reaping idle hooks-only Agent ${id} (session ${agent.sessionId.slice(0, 8)}...)`,
+        );
+        this.reAdoptableSessions.set(agent.sessionId, { cwd: agent.projectDir, reapedAt: now });
+        this.removeAgent(id);
+      }
+    }
+    for (const [sid, entry] of this.reAdoptableSessions) {
+      if (now - entry.reapedAt > HOOKS_ONLY_READOPT_WINDOW_MS) this.reAdoptableSessions.delete(sid);
+    }
+  }
+
   // ── Restore persisted external agents (standalone) ──
 
   /**
@@ -598,6 +648,10 @@ export class AgentRuntime {
     if (this.staleCheckTimer) {
       clearInterval(this.staleCheckTimer);
       this.staleCheckTimer = null;
+    }
+    if (this.reaperTimer) {
+      clearInterval(this.reaperTimer);
+      this.reaperTimer = null;
     }
 
     for (const id of [...this.store.keys()]) {

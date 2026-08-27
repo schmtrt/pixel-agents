@@ -116,6 +116,12 @@ export interface HookProvider {
    *  previous estimate and widens it if a context ever exceeds it. */
   contextWindowForModel?(model: string | undefined): number | undefined;
 
+  /** True when this provider keeps no transcript files: all session state
+   *  comes from hook events. Such sessions are reaped when idle (no file to
+   *  stay alive by) and may be auto-adopted from buffered hook events when
+   *  their SessionStart never arrived (server (re)start, older plugin). */
+  readonly hooksOnly?: boolean;
+
   // ── Optional file fallback (heuristic mode) ──
 
   /** Session directories to scan. Undefined = no file fallback. */

@@ -2,7 +2,11 @@ import * as path from 'path';
 
 import type { AgentEvent, HookProvider } from '../../core/src/provider.js';
 import type { AgentStateStore } from './agentStateStore.js';
-import { SESSION_END_GRACE_MS } from './constants.js';
+import {
+  HOOKS_ONLY_AUTO_ADOPT_MIN_AGE_MS,
+  HOOKS_ONLY_AUTO_ADOPT_RECENT_MS,
+  SESSION_END_GRACE_MS,
+} from './constants.js';
 import type { SessionRouter } from './sessionRouter.js';
 import { getInlineTeammates, hasInlineTeammates, hasPromotedBackgroundAgent } from './teamUtils.js';
 import { cancelPermissionTimer, cancelWaitingTimer } from './timerManager.js';
@@ -54,6 +58,10 @@ interface SessionLifecycleCallbacks {
   /** Called when a teammate should be removed (e.g. no longer in team config members).
    *  Removes the teammate agent from the office. */
   onTeammateRemoved?: (teammateAgentId: number) => void;
+  /** Destructive lookup of a previously reaped hooks-only session (last known
+   *  cwd). Present entries are consumed on read so each re-adoption happens
+   *  exactly once. */
+  getReAdoptableSession?: (sessionId: string) => { cwd: string } | undefined;
 }
 
 export class HookEventHandler {
@@ -66,6 +74,13 @@ export class HookEventHandler {
   private readonly providers: ReadonlyMap<string, HookProvider>;
   /** Default provider (see constructor). */
   private provider: HookProvider;
+  /** Sessions that only ever sent hook events without a SessionStart/agent
+   *  (buffered because unknown). Tracked so the runtime's sweep can
+   *  auto-adopt active hooks-only sessions whose SessionStart never arrived. */
+  private readonly recentUnknownSessions = new Map<
+    string,
+    { firstAt: number; lastAt: number; providers: Set<string> }
+  >();
 
   constructor(
     private agents: AgentStateStore,
@@ -141,6 +156,51 @@ export class HookEventHandler {
   /** Remove an agent's session mapping (called on agent removal/terminal close). */
   unregisterAgent(sessionId: string): void {
     this.sessionRouter.unregister(sessionId);
+    this.recentUnknownSessions.delete(sessionId);
+  }
+
+  /** Remember that a hooks-only provider keeps sending events for a session
+   *  the server has no agent for (its SessionStart never arrived). */
+  private trackUnknown(sessionId: string, providerId: string): void {
+    const now = Date.now();
+    const entry = this.recentUnknownSessions.get(sessionId);
+    if (entry) {
+      entry.lastAt = now;
+      entry.providers.add(providerId);
+    } else {
+      this.recentUnknownSessions.set(sessionId, {
+        firstAt: now,
+        lastAt: now,
+        providers: new Set([providerId]),
+      });
+    }
+  }
+
+  /**
+   * Auto-adopt active hooks-only sessions whose events have been buffering
+   * for a while because no SessionStart ever arrived (server (re)started or
+   * the plugin predates the SessionStart announce). Only sessions seen
+   * exclusively via hooks-only providers qualify, and only after a grace
+   * period — internal-agent registration races resolve in milliseconds, so
+   * this can never steal one. `cwd` is the fallback project dir (the server
+   * launch dir); a later SessionStart refines it.
+   */
+  autoAdoptBufferedSessions(cwd: string): void {
+    const now = Date.now();
+    for (const [sessionId, entry] of this.recentUnknownSessions) {
+      if (now - entry.firstAt < HOOKS_ONLY_AUTO_ADOPT_MIN_AGE_MS) continue;
+      if (now - entry.lastAt > HOOKS_ONLY_AUTO_ADOPT_RECENT_MS) {
+        this.recentUnknownSessions.delete(sessionId);
+        continue;
+      }
+      if (![...entry.providers].every((p) => this.providers.get(p)?.hooksOnly)) continue;
+      this.recentUnknownSessions.delete(sessionId);
+      if (debug)
+        console.log(
+          `[Pixel Agents] Hook: auto-adopting buffered session ${sessionId.slice(0, 8)}... (hooks-only, no SessionStart)`,
+        );
+      this.lifecycleCallbacks.onExternalSessionDetected?.(sessionId, undefined, cwd);
+    }
   }
 
   /**
@@ -204,7 +264,17 @@ export class HookEventHandler {
         const agent = this.agents.get(existingAgentId);
         if (agent) {
           agent.hookDelivered = true;
+          agent.lastHookAt = Date.now();
+          // A late SessionStart (plugin announce for an already auto-adopted
+          // session) refines the project dir, which the auto-adoption only
+          // knew from the server's launch dir.
+          if (agent.hooksOnly && cwd && agent.projectDir !== cwd) {
+            agent.projectDir = cwd;
+            agent.folderName = path.basename(cwd);
+            this.agents.persist();
+          }
         }
+        this.recentUnknownSessions.delete(event.session_id);
         if (debug)
           console.log(
             `[Pixel Agents] Hook: Agent ${existingAgentId} - SessionStart(source=${source}) known`,
@@ -216,6 +286,8 @@ export class HookEventHandler {
         if (agent.sessionId === event.session_id) {
           this.registerAgent(agent.sessionId, id);
           agent.hookDelivered = true;
+          agent.lastHookAt = Date.now();
+          this.recentUnknownSessions.delete(event.session_id);
           if (debug)
             console.log(
               `[Pixel Agents] Hook: Agent ${id} - SessionStart(source=${source}) auto-discovered`,
@@ -266,6 +338,7 @@ export class HookEventHandler {
           transcriptPath,
           cwd: cwd ?? '',
         });
+        this.recentUnknownSessions.delete(event.session_id);
       } else {
         if (debug && tracked)
           console.log(
@@ -298,6 +371,7 @@ export class HookEventHandler {
         pending.transcriptPath,
         pending.cwd,
       );
+      this.recentUnknownSessions.delete(event.session_id);
       // Re-process this event now that the agent exists
       this.handleEvent(providerId, event);
       return;
@@ -314,6 +388,26 @@ export class HookEventHandler {
       }
     }
     if (agentId === undefined) {
+      // Reaped hooks-only session (OpenCode): the character left after an idle
+      // timeout. Its next live event brings it straight back without waiting
+      // for a fresh SessionStart. Destructive get — consumed on read.
+      if (normEvent.kind !== 'sessionEnd') {
+        const reAdopt = this.lifecycleCallbacks.getReAdoptableSession?.(event.session_id);
+        if (reAdopt) {
+          if (debug)
+            console.log(
+              `[Pixel Agents] Hook: ${eventName} - re-adopting reaped session ${event.session_id.slice(0, 8)}...`,
+            );
+          this.lifecycleCallbacks.onExternalSessionDetected?.(
+            event.session_id,
+            undefined,
+            reAdopt.cwd,
+          );
+          this.recentUnknownSessions.delete(event.session_id);
+          this.handleEvent(providerId, event);
+          return;
+        }
+      }
       // Buffer if: pending external session, already buffering for this session,
       // OR agents exist that haven't been registered yet (internal agent race:
       // hook event arrives before registerAgent is called after launchNewTerminal).
@@ -331,6 +425,10 @@ export class HookEventHandler {
           );
         this.sessionRouter.bufferEvent(providerId, event);
       }
+      // Track even when this event itself isn't buffered (first event for an
+      // unknown session finds no pending/buffered state yet): the runtime's
+      // sweep auto-adopts active hooks-only sessions from these records.
+      this.trackUnknown(event.session_id, providerId);
       return;
     }
 
@@ -338,6 +436,8 @@ export class HookEventHandler {
     if (!agent) return;
 
     agent.hookDelivered = true;
+    agent.lastHookAt = Date.now();
+    this.recentUnknownSessions.delete(event.session_id);
     if (debug)
       console.log(
         `[Pixel Agents] Hook: Agent ${agentId} - ${eventName} (session=${event.session_id.slice(0, 8)}...)`,

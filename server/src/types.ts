@@ -30,6 +30,10 @@ export interface AgentState {
   seenUnknownRecordTypes: Set<string>;
   /** Whether a hook event has been delivered for this agent (suppresses heuristic timers) */
   hookDelivered: boolean;
+  /** Timestamp of the last delivered hook event (ms since epoch). Drives the
+   *  hooks-only idle reaper (0/undefined = never delivered since this
+   *  server startup — includes persisted agents that come back via restore). */
+  lastHookAt?: number;
   /** True when agent has no transcript file (provider doesn't use JSONL). All state from hooks. */
   hooksOnly?: boolean;
   /** Provider that created this agent (defaults to 'claude') */

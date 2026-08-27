@@ -345,6 +345,9 @@ async function main(): Promise<void> {
       runtime.startStaleCheck();
     }
 
+    // Hooks-only reaper (OpenCode): independent of any Claude project dir.
+    runtime.startHooksOnlyReaper();
+
     // The URL the operator opens has to be REACHABLE (a wildcard bind address
     // is a bind target, not an address you can browse to — `--host 0.0.0.0`
     // used to print a dead `http://0.0.0.0:PORT`) and has to carry the token,

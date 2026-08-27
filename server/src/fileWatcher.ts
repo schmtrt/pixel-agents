@@ -1136,6 +1136,7 @@ export function adoptExternalSessionFromHook(
       hadToolsInTurn: false,
       hookDelivered: true,
       hooksOnly: true,
+      lastHookAt: Date.now(),
       lastDataAt: Date.now(),
       linesProcessed: 0,
       seenUnknownRecordTypes: new Set(),

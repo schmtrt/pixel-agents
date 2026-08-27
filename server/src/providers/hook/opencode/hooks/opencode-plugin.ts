@@ -149,6 +149,27 @@ function postToServer(server: { port: number; token: string }, body: string): Pr
   });
 }
 
+/** Sessions this plugin instance already announced via SessionStart. */
+const announcedSessions = new Set<string>();
+
+/** Ensure the server knows about a session: on first contact, send SessionStart
+ *  (with the plugin's working directory) before the session's first real event.
+ *  Sessions that were already running before the server (re)start would
+ *  otherwise never be adopted — their events sit in the server's buffer. */
+async function announceSession(sessionId: string, cwd?: string): Promise<void> {
+  if (announcedSessions.has(sessionId)) return;
+  announcedSessions.add(sessionId);
+  const servers = readRegistry();
+  if (servers.length === 0) return;
+  const body = JSON.stringify({
+    session_id: sessionId,
+    hook_event_name: 'SessionStart',
+    source: 'opencode',
+    cwd: cwd ?? undefined,
+  });
+  await Promise.all(servers.map((server) => postToServer(server, body)));
+}
+
 /** Fire-and-forget fan-out to every live server. Never throws. */
 function emit(payload: Record<string, unknown>): void {
   try {
@@ -182,6 +203,7 @@ const plugin = async (input?: PluginInput): Promise<PluginHooks> => {
         if (type === 'session.created') {
           const info = isRecord(props['info']) ? (props['info'] as SessionInfo) : undefined;
           if (info && typeof info.id === 'string') {
+            announcedSessions.add(info.id);
             emit({
               session_id: info.id,
               hook_event_name: 'SessionStart',
@@ -190,6 +212,7 @@ const plugin = async (input?: PluginInput): Promise<PluginHooks> => {
             });
           }
         } else if (type === 'session.idle' && typeof props['sessionID'] === 'string') {
+          await announceSession(props['sessionID'], cwd);
           emit({
             session_id: props['sessionID'],
             hook_event_name: 'TurnEnd',
@@ -198,6 +221,7 @@ const plugin = async (input?: PluginInput): Promise<PluginHooks> => {
         } else if (type === 'session.deleted') {
           const info = isRecord(props['info']) ? (props['info'] as SessionInfo) : undefined;
           if (info && typeof info.id === 'string') {
+            await announceSession(info.id, cwd);
             emit({
               session_id: info.id,
               hook_event_name: 'SessionEnd',
@@ -205,6 +229,7 @@ const plugin = async (input?: PluginInput): Promise<PluginHooks> => {
             });
           }
         } else if (type === 'permission.updated' && typeof props['sessionID'] === 'string') {
+          await announceSession(props['sessionID'], cwd);
           emit({
             session_id: props['sessionID'],
             hook_event_name: 'PermissionRequest',
@@ -218,6 +243,7 @@ const plugin = async (input?: PluginInput): Promise<PluginHooks> => {
     'tool.execute.before': async (i: ToolBeforeInput, o: ToolBeforeOutput): Promise<void> => {
       try {
         if (typeof i.sessionID !== 'string' || typeof i.tool !== 'string') return;
+        await announceSession(i.sessionID, cwd);
         emit({
           session_id: i.sessionID,
           hook_event_name: 'ToolStart',
@@ -233,6 +259,7 @@ const plugin = async (input?: PluginInput): Promise<PluginHooks> => {
     'tool.execute.after': async (i: ToolAfterInput): Promise<void> => {
       try {
         if (typeof i.sessionID !== 'string') return;
+        await announceSession(i.sessionID, cwd);
         emit({
           session_id: i.sessionID,
           hook_event_name: 'ToolEnd',

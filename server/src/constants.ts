@@ -29,6 +29,26 @@ export const EXTERNAL_STALE_CHECK_INTERVAL_MS = 30_000;
  *  so the file's mtime becomes stale before the dismissal expires. */
 export const DISMISSED_COOLDOWN_MS = 180_000; // 3 minutes
 
+// ── Hooks-only session lifecycle (OpenCode) ───────────────────
+// Hooks-only providers have no transcript file and no reliable SessionEnd
+// (OpenCode only fires it on session.deleted), so an idle agent would linger
+// in the office forever. The reaper despawns them after a grace period; the
+// session can be re-adopted on its next event so active sessions never lose
+// their character mid-conversation.
+/** Hooks-only agents with no hook event for this long leave the office. */
+export const HOOKS_ONLY_IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+/** Reaped sessions stay re-adoptable (next event brings the character back). */
+export const HOOKS_ONLY_READOPT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+/** Reaper sweep interval. */
+export const HOOKS_ONLY_REAP_INTERVAL_MS = 30_000; // 30 seconds
+/** Sessions whose hook events have buffered at least this long become
+ *  auto-adoption candidates (internal-agent registration races resolve in
+ *  milliseconds, so this is a safe margin). */
+export const HOOKS_ONLY_AUTO_ADOPT_MIN_AGE_MS = 15_000; // 15 seconds
+/** A buffered session is auto-adopted only while it is still active
+ *  (last event within this window); otherwise the entry is dropped. */
+export const HOOKS_ONLY_AUTO_ADOPT_RECENT_MS = 60_000; // 1 minute
+
 // ── Context Window Usage ────────────────────────────────────
 /** Window size assumed until a transcript proves otherwise. Transcripts never
  *  state the model's context limit, so this is the floor, not the truth. */
