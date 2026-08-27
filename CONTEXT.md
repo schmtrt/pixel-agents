@@ -196,7 +196,7 @@ _Avoid_: file fallback, transcript mode, polling mode
 ## Integration Boundary
 
 **Provider**:
-The integration that connects one coding-agent CLI — Claude Code, Codex, Pi, Antigravity, OpenClaw, and the like — to Pixel Agents. A provider normalizes its CLI's raw activity into agent events and knows how to install that CLI's hooks. One provider per CLI; Claude Code is the reference implementation.
+The integration that connects one coding-agent CLI — Claude Code, Codex, Pi, Antigravity, OpenClaw, and the like — to Pixel Agents. A provider normalizes its CLI's raw activity into agent events and knows how to install that CLI's hooks. One provider per CLI; Claude Code is the reference implementation and OpenCode (hooks-only) the second.
 _Avoid_: plugin, connector
 
 **Agent event**:
