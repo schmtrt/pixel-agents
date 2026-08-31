@@ -54,12 +54,14 @@ export function AgentDetailsModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} className="w-md max-w-[90vw]">
-      <div className="flex flex-col gap-2 mb-3 text-xs">
-        <div className="flex gap-2 items-center">
-          <span className="text-accent-bright w-16 shrink-0">MODEL</span>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 mb-3 text-xs">
+        <span className="text-accent-bright whitespace-nowrap">MODEL</span>
+        <span className="flex items-center min-w-0">
           {badge ? (
             <span
+              className="overflow-hidden text-ellipsis whitespace-nowrap"
               style={{ color: MODEL_BADGE_COLORS[badge] ?? MODEL_BADGE_COLOR_DEFAULT }}
+              title={ch?.model ?? badge}
               data-testid="details-model"
             >
               {badge.toUpperCase()}
@@ -70,17 +72,18 @@ export function AgentDetailsModal({
               unknown (reported at end of first turn)
             </span>
           )}
-        </div>
-        <div className="flex gap-2 items-center">
-          <span className="text-accent-bright w-16 shrink-0">STATUS</span>
-          <span data-testid="details-status">{status ?? 'active'}</span>
-        </div>
-        <div className="flex gap-2 items-center">
-          <span className="text-accent-bright w-16 shrink-0">WORKDIR</span>
-          <span className="overflow-hidden text-ellipsis whitespace-nowrap" title={cwd}>
-            {cwd ?? ch?.folderName ?? '—'}
-          </span>
-        </div>
+        </span>
+        <span className="text-accent-bright whitespace-nowrap">STATUS</span>
+        <span className="flex items-center" data-testid="details-status">
+          {status ?? 'active'}
+        </span>
+        <span className="text-accent-bright whitespace-nowrap">WORKDIR</span>
+        <span
+          className="overflow-hidden text-ellipsis whitespace-nowrap"
+          title={cwd ?? ch?.folderName}
+        >
+          {cwd ?? ch?.folderName ?? '—'}
+        </span>
       </div>
       <div
         ref={feedRef}
