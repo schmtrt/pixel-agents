@@ -13,6 +13,13 @@ export const SERVER_JSON_DIR = '.pixel-agents';
 export const SERVER_JSON_NAME = 'server.json';
 export const HOOK_SCRIPTS_DIR = '.pixel-agents/hooks';
 
+// ── Ledger (append-only event log) ───────────────────────────
+
+export const LEDGER_DIR_NAME = 'ledger';
+export const LEDGER_FILE_NAME = 'events.jsonl';
+/** Active segment rotates to events-<ts>.jsonl beyond this size. */
+export const LEDGER_MAX_FILE_BYTES = 16 * 1024 * 1024;
+
 // ── Display ──────────────────────────────────────────────────
 
 export const BASH_COMMAND_DISPLAY_MAX_LENGTH = 30;

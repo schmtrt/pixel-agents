@@ -19,6 +19,7 @@ import {
   WS_CLOSE_FORBIDDEN_ORIGIN,
   WS_CLOSE_UNAUTHORIZED,
 } from './constants.js';
+import type { Ledger } from './ledger.js';
 import type { AgentState } from './types.js';
 
 /** Options for creating the HTTP + WebSocket server. */
@@ -45,6 +46,10 @@ export interface HttpServerOptions {
   onSetHooksEnabled?: SetHooksEnabledSideEffect;
   /** Invoked when an external asset directory is added/removed. Standalone reloads + re-broadcasts assets here. */
   onReloadAssets?: ReloadAssetsSideEffect;
+  /** M0 event ledger. When present, GET /api/ledger/tail serves its tail
+   *  (tokened requests only — the log is raw internal state, same privilege
+   *  tier as a hook install). */
+  ledger?: Ledger;
 }
 
 /** Result of createHttpServer(). */
@@ -87,6 +92,7 @@ export async function createHttpServer(options: HttpServerOptions): Promise<Http
   registerHealthRoute(app);
   registerHookRoute(app, options);
   registerWebSocketRoute(app, options);
+  if (options.ledger) registerLedgerRoute(app, options);
 
   // ── Listen ──────────────────────────────────────────────────
 
@@ -105,6 +111,22 @@ function registerHealthRoute(app: FastifyInstance): void {
     uptime: Math.floor((Date.now() - startTime) / 1000),
     pid: process.pid,
   }));
+}
+
+// ── Ledger tail (M0) ────────────────────────────────────────────
+
+function registerLedgerRoute(app: FastifyInstance, options: HttpServerOptions): void {
+  app.get<{ Querystring: { n?: string } }>('/api/ledger/tail', async (request, reply) => {
+    // The log is internal truth, not office ambience: privileged callers
+    // only (same out-of-band token the /ws gate demands).
+    const privileged = options.embedded || standaloneTokenValid(request.raw.url, options.token);
+    if (!privileged) {
+      return reply.code(403).send({ error: 'token required' });
+    }
+    const raw = Number.parseInt(request.query.n ?? '100', 10);
+    const n = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), 10_000) : 100;
+    return { events: options.ledger!.tail(n) };
+  });
 }
 
 // ── Hook Events ────────────────────────────────────────────────

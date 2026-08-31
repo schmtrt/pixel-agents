@@ -28,6 +28,7 @@ import {
 } from './configPersistence.js';
 import { MAX_PORT, MIN_PORT } from './constants.js';
 import { FileStateAdapter } from './fileStateAdapter.js';
+import { attachLedger, Ledger } from './ledger.js';
 import {
   claudeProvider,
   copyHookScript,
@@ -158,6 +159,11 @@ async function main(): Promise<void> {
   const adapter = new FileStateAdapter({ namespace: 'standalone' });
   store.setAdapter(adapter);
 
+  // ── M0 Ledger: append-only event log; the office stays a pure observer ──
+  const ledger = new Ledger();
+  attachLedger(store, ledger);
+  console.log(`[Pixel Agents] Ledger: ${ledger.activeFile}`);
+
   // ── Create server ──
   const server = new PixelAgentsServer();
 
@@ -263,6 +269,7 @@ async function main(): Promise<void> {
       assetCache,
       onSetHooksEnabled,
       onReloadAssets,
+      ledger,
     });
     currentConfig = { port: config.port, token: config.token };
 
