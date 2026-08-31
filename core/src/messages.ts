@@ -14,6 +14,7 @@ export type ServerMessage =
   | AgentSelected
   | ExistingAgents
   | AgentStatus
+  | AgentActivityLog
   | AgentToolStart
   | AgentToolDone
   | AgentToolsClear
@@ -75,6 +76,7 @@ export interface AgentCreated {
   type: 'agentCreated';
   id: number;
   folderName?: string;
+  cwd?: string;
   isExternal?: boolean;
   palette?: number;
   hueShift?: number;
@@ -95,6 +97,7 @@ export interface ExistingAgents {
   agents: number[];
   agentMeta: Record<string, AgentSeatMeta>;
   folderNames: Record<string, string>;
+  cwdPaths?: Record<string, string>;
   externalAgents: Record<string, boolean>;
 }
 
@@ -113,11 +116,27 @@ export interface AgentStatus {
 
 export type AgentActivityStatus = 'active' | 'waiting';
 
+export interface AgentActivityLog {
+  type: 'agentActivityLog';
+  id: number;
+  entries: AgentActivityEntry[];
+}
+
+export interface AgentActivityEntry {
+  toolId: string;
+  toolName?: string;
+  status: string;
+  detail?: string;
+  done: boolean;
+  ts: number;
+}
+
 export interface AgentToolStart {
   type: 'agentToolStart';
   id: number;
   toolId: string;
   status: string;
+  detail?: string;
   toolName?: string;
   permissionActive?: boolean;
   runInBackground?: boolean;
@@ -151,6 +170,7 @@ export interface SubagentToolStart {
   parentToolId: string;
   toolId: string;
   status: string;
+  detail?: string;
 }
 
 export interface SubagentToolDone {

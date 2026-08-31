@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { HooksConsentRequest } from '../../../core/src/messages.js';
+import type { AgentActivityEntry, HooksConsentRequest } from '../../../core/src/messages.js';
+import { ACTIVITY_FEED_MAX } from '../constants.js';
 import { playDoneSound, playPermissionSound, setSoundEnabled } from '../notificationSound.js';
 import type { ExistingAgentMeta, PendingAgent } from '../office/engine/existingAgents.js';
 import { reconcileExistingAgents } from '../office/engine/existingAgents.js';
@@ -72,6 +73,11 @@ interface ExtensionMessageState {
   agents: number[];
   selectedAgent: number | null;
   agentTools: Record<number, ToolActivity[]>;
+  /** Bounded feed of recent tool calls per agent (terminal view in the
+   *  details popup). Survives agentToolsClear; seeded by agentActivityLog. */
+  agentActivity: Record<number, AgentActivityEntry[]>;
+  /** Full working directory per agent (from agentCreated.cwd / cwdPaths). */
+  agentCwds: Record<number, string>;
   agentStatuses: Record<number, string>;
   subagentTools: Record<number, Record<string, ToolActivity[]>>;
   subagentCharacters: SubagentCharacter[];
@@ -124,6 +130,8 @@ export function useExtensionMessages(
   const [agents, setAgents] = useState<number[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
   const [agentTools, setAgentTools] = useState<Record<number, ToolActivity[]>>({});
+  const [agentActivity, setAgentActivity] = useState<Record<number, AgentActivityEntry[]>>({});
+  const [agentCwds, setAgentCwds] = useState<Record<number, string>>({});
   const [agentStatuses, setAgentStatuses] = useState<Record<number, string>>({});
   const [subagentTools, setSubagentTools] = useState<
     Record<number, Record<string, ToolActivity[]>>
@@ -247,6 +255,10 @@ export function useExtensionMessages(
       } else if (msg.type === 'agentCreated') {
         const id = msg.id as number;
         const folderName = msg.folderName as string | undefined;
+        const cwd = msg.cwd as string | undefined;
+        if (cwd) {
+          setAgentCwds((prev) => (prev[id] === cwd ? prev : { ...prev, [id]: cwd }));
+        }
         const isTeammate = msg.isTeammate as boolean | undefined;
         const teammateName = msg.teammateName as string | undefined;
         const teammateParentId = msg.parentAgentId as number | undefined;
@@ -312,6 +324,18 @@ export function useExtensionMessages(
           delete next[id];
           return next;
         });
+        setAgentActivity((prev) => {
+          if (!(id in prev)) return prev;
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+        setAgentCwds((prev) => {
+          if (!(id in prev)) return prev;
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
         // Remove all sub-agent characters belonging to this agent
         delete backgroundParentToolIdsRef.current[id];
         os.removeAllSubagents(id);
@@ -321,7 +345,11 @@ export function useExtensionMessages(
         const incoming = msg.agents as number[];
         const meta = (msg.agentMeta || {}) as Record<number, ExistingAgentMeta>;
         const folderNames = (msg.folderNames || {}) as Record<number, string>;
+        const cwdPaths = (msg.cwdPaths || {}) as Record<number, string>;
         const externalAgents = (msg.externalAgents || {}) as Record<number, boolean>;
+        if (Object.keys(cwdPaths).length > 0) {
+          setAgentCwds((prev) => ({ ...prev, ...cwdPaths }));
+        }
         const headlessAgents: Record<number, boolean> = {};
         for (const id of incoming) {
           noteFolderName(folderNames[id]);
@@ -359,6 +387,33 @@ export function useExtensionMessages(
         const toolId = msg.toolId as string;
         const status = msg.status as string;
         const permissionActive = msg.permissionActive as boolean | undefined;
+        const toolDetail = msg.detail as string | undefined;
+        const toolNameRaw = (msg.toolName as string | undefined) ?? extractToolName(status);
+        setAgentActivity((prev) => {
+          const list = prev[id] ?? [];
+          const live = list.find((e) => e.toolId === toolId && !e.done);
+          if (live) {
+            return {
+              ...prev,
+              [id]: list.map((e) =>
+                e === live ? { ...e, status, detail: toolDetail ?? e.detail } : e,
+              ),
+            };
+          }
+          const entry: AgentActivityEntry = {
+            toolId,
+            toolName: toolNameRaw ?? undefined,
+            status,
+            detail: toolDetail,
+            done: false,
+            ts: Date.now(),
+          };
+          const next = [...list, entry];
+          return {
+            ...prev,
+            [id]: next.length > ACTIVITY_FEED_MAX ? next.slice(-ACTIVITY_FEED_MAX) : next,
+          };
+        });
         setAgentTools((prev) => {
           const list = prev[id] || [];
           if (list.some((t) => t.toolId === toolId)) return prev;
@@ -410,6 +465,14 @@ export function useExtensionMessages(
       } else if (msg.type === 'agentToolDone') {
         const id = msg.id as number;
         const toolId = msg.toolId as string;
+        setAgentActivity((prev) => {
+          const list = prev[id];
+          if (!list) return prev;
+          return {
+            ...prev,
+            [id]: list.map((e) => (e.toolId === toolId && !e.done ? { ...e, done: true } : e)),
+          };
+        });
         setAgentTools((prev) => {
           const list = prev[id];
           if (!list) return prev;
@@ -417,6 +480,20 @@ export function useExtensionMessages(
             ...prev,
             [id]: list.map((t) => (t.toolId === toolId ? { ...t, done: true } : t)),
           };
+        });
+      } else if (msg.type === 'agentActivityLog') {
+        // Server-side ring buffer replay (client (re)connect). Authoritative for
+        // the feed; entries already seen live dedup by toolId.
+        const id = msg.id as number;
+        const entries = (msg.entries ?? []) as AgentActivityEntry[];
+        setAgentActivity((prev) => {
+          const existing = prev[id] ?? [];
+          const merged = [...entries];
+          for (const e of existing) {
+            if (!merged.some((m) => m.toolId === e.toolId)) merged.push(e);
+          }
+          merged.sort((a, b) => a.ts - b.ts);
+          return { ...prev, [id]: merged.slice(-ACTIVITY_FEED_MAX) };
         });
       } else if (msg.type === 'agentToolsClear') {
         const id = msg.id as number;
@@ -802,5 +879,7 @@ export function useExtensionMessages(
     setAreaMappings,
     showAreas,
     setShowAreas,
+    agentActivity,
+    agentCwds,
   };
 }

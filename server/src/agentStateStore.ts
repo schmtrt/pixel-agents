@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { appendFileSync } from 'node:fs';
 
 import type { StateAdapter } from '../../core/src/adapter.js';
+import { markActivityDone, pushActivityEntry } from './activityLog.js';
 import type { AgentState, PersistedAgent } from './types.js';
 
 /**
@@ -135,6 +136,24 @@ export class AgentStateStore {
 
   broadcast(message: Record<string, unknown>): void {
     debugLogBroadcast(message);
+    // Central activity-log tap: every agentToolStart/agentToolDone broadcast,
+    // whatever its origin (hooks, JSONL parser, timers), lands in the agent's
+    // ring buffer that backs the details popup feed.
+    if (message.type === 'agentToolStart' || message.type === 'agentToolDone') {
+      const agent = this.agents.get(message.id as number);
+      if (agent && typeof message.toolId === 'string') {
+        if (message.type === 'agentToolStart') {
+          pushActivityEntry(agent, {
+            toolId: message.toolId,
+            toolName: typeof message.toolName === 'string' ? message.toolName : undefined,
+            status: typeof message.status === 'string' ? message.status : '',
+            detail: typeof message.detail === 'string' ? message.detail : undefined,
+          });
+        } else {
+          markActivityDone(agent, message.toolId);
+        }
+      }
+    }
     this.emitter.emit('broadcast', message);
   }
 

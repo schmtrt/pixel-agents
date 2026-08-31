@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased (agent-hq fork)
+
+### Features
+
+- **Agent details popup ("terminal view")** — Clicking a character now opens a details window showing the model serving the session (badge + raw model id), the agent's full working directory, its status, and a scrollable feed of the last 50 concrete tool calls with timestamps and untruncated inputs (full Bash commands, file paths, task descriptions) — where the overlay above a character only fits a 30-character summary.
+- **Tool detail + cwd on the wire** — `agentToolStart`/`subagentToolStart` carry an optional `detail` string, `agentCreated`/`existingAgents` carry the full `cwd`. New `agentActivityLog` ServerMessage replays each agent's bounded activity ring buffer on client (re)connect, so the feed survives webview reloads.
+
 ## v1.4.1
 
 ### Features

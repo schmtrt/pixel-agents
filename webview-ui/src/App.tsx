@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { toMajorMinor } from './changelogData.js';
+import { AgentDetailsModal } from './components/AgentDetailsModal.js';
 import { BottomToolbar } from './components/BottomToolbar.js';
 import { ChangelogModal } from './components/ChangelogModal.js';
 import { ConnectionIndicator } from './components/ConnectionIndicator.js';
@@ -96,6 +97,8 @@ function App() {
     setAreaMappings,
     showAreas,
     setShowAreas,
+    agentActivity,
+    agentCwds,
   } = useExtensionMessages(getOfficeState, editor.setLastSavedLayout, isEditDirty);
 
   // Show migration notice once layout reset is detected
@@ -232,13 +235,24 @@ function App() {
     transport.send({ type: 'closeAgent', id });
   }, []);
 
+  const [detailsAgentId, setDetailsAgentId] = useState<number | null>(null);
+
   const handleClick = useCallback((agentId: number) => {
     // If clicked agent is a sub-agent, focus the parent's terminal instead
     const os = getOfficeState();
     const meta = os.subagentMeta.get(agentId);
     const focusId = meta ? meta.parentAgentId : agentId;
     transport.send({ type: 'focusAgent', id: focusId });
+    // Pop the details window (model, workdir, concrete tool feed) on click.
+    setDetailsAgentId(focusId);
   }, []);
+
+  // Close the popup if its agent left the office.
+  useEffect(() => {
+    if (detailsAgentId !== null && !agents.includes(detailsAgentId)) {
+      setDetailsAgentId(null);
+    }
+  }, [agents, detailsAgentId]);
 
   const officeState = getOfficeState();
 
@@ -533,6 +547,22 @@ function App() {
         isOpen={isChangelogOpen}
         onClose={() => setIsChangelogOpen(false)}
         currentVersion={extensionVersion}
+      />
+
+      <AgentDetailsModal
+        isOpen={detailsAgentId !== null && !editor.isEditMode}
+        onClose={() => setDetailsAgentId(null)}
+        agentId={detailsAgentId}
+        officeState={officeState}
+        activity={detailsAgentId !== null ? (agentActivity[detailsAgentId] ?? []) : []}
+        cwd={detailsAgentId !== null ? agentCwds[detailsAgentId] : undefined}
+        status={
+          detailsAgentId !== null
+            ? agentStatuses[detailsAgentId] === 'waiting'
+              ? 'waiting for input'
+              : 'active'
+            : undefined
+        }
       />
 
       <SettingsModal

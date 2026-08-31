@@ -17,6 +17,10 @@ export const HOOK_SCRIPTS_DIR = '.pixel-agents/hooks';
 
 export const BASH_COMMAND_DISPLAY_MAX_LENGTH = 30;
 export const TASK_DESCRIPTION_DISPLAY_MAX_LENGTH = 40;
+/** Cap for the untruncated tool-input detail carried to the details popup. */
+export const TOOL_DETAIL_MAX_LENGTH = 500;
+/** Ring-buffer size of each agent's recent-tool activity log. */
+export const ACTIVITY_LOG_MAX_ENTRIES = 50;
 
 // ── Transport ────────────────────────────────────────────────
 // Connection-state names for the MessageTransport state machine.

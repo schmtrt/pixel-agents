@@ -206,6 +206,12 @@ export const CHARACTER_HIT_HALF_WIDTH = 8;
 export const CHARACTER_HIT_HEIGHT = 24;
 export const TOOL_OVERLAY_VERTICAL_OFFSET = 32;
 
+// ── Agent details popup (terminal view) ─────────────────────
+/** Ring-buffer cap of the recent-tool activity feed shown in the popup. */
+export const ACTIVITY_FEED_MAX = 50;
+/** Scrollback height of the feed in pixels. */
+export const ACTIVITY_FEED_HEIGHT = 280;
+
 // ── Greeter + Intro bubble ──────────────────────────────────
 /** Reserved character id for the Intro's greeter. Far outside both real agent
  *  ids (positive) and sub-agent ids (small negatives from -1 down). */

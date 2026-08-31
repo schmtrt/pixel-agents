@@ -1,6 +1,7 @@
 const debug = process.env.PIXEL_AGENTS_DEBUG !== '0';
 
 import type { HookProvider } from '../../core/src/provider.js';
+import { buildToolDetail, clipToolDetail } from './activityLog.js';
 import type { AgentStateStore } from './agentStateStore.js';
 import { TEXT_IDLE_DELAY_MS, TOOL_DONE_DELAY_MS } from './constants.js';
 import { updateContextUsage } from './contextUsage.js';
@@ -223,6 +224,7 @@ export function processTranscriptLine(
                 toolId: block.id,
                 status,
                 toolName,
+                detail: clipToolDetail(buildToolDetail(toolName, block.input)),
                 permissionActive: agent.permissionSent,
                 runInBackground,
                 isTeammateSpawn: isTeammateSpawn || undefined,

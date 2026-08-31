@@ -539,10 +539,14 @@ export function sendExistingAgents(
 
   // Include folderName and isExternal per agent
   const folderNames: Record<number, string> = {};
+  const cwdPaths: Record<number, string> = {};
   const externalAgents: Record<number, boolean> = {};
   for (const [id, agent] of agents) {
     if (agent.folderName) {
       folderNames[id] = agent.folderName;
+    }
+    if (agent.projectDir) {
+      cwdPaths[id] = agent.projectDir;
     }
     if (agent.isExternal) {
       externalAgents[id] = true;
@@ -557,6 +561,7 @@ export function sendExistingAgents(
     agents: agentIds,
     agentMeta,
     folderNames,
+    cwdPaths,
     externalAgents,
   });
   // Note: sendCurrentAgentStatuses is called separately AFTER layoutLoaded

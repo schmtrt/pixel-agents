@@ -1,6 +1,7 @@
 import * as path from 'path';
 
 import type { AgentEvent, HookProvider } from '../../core/src/provider.js';
+import { buildToolDetail, clipToolDetail, pushActivityEntry } from './activityLog.js';
 import type { AgentStateStore } from './agentStateStore.js';
 import {
   HOOKS_ONLY_AUTO_ADOPT_MIN_AGE_MS,
@@ -577,6 +578,14 @@ export class HookEventHandler {
     // tool ID (not the transient hook ID) so that SubagentStop/tool_result cleanup
     // can find and remove them. JSONL handles agentToolStart (with runInBackground)
     // for these tools.
+    const detail = clipToolDetail(buildToolDetail(toolName, toolInput));
+    // Task/Agent spawns are not broadcast from here (JSONL owns them) — for
+    // hooks-only providers like OpenCode there IS no JSONL, so log the spawn
+    // explicitly or it would vanish from the popup feed. Everything else is
+    // logged centrally by the AgentStateStore.broadcast tap.
+    if ((toolName === 'Task' || toolName === 'Agent') && activeProvider.hooksOnly) {
+      pushActivityEntry(agent, { toolId: hookToolId, toolName, status, detail });
+    }
     if (toolName !== 'Task' && toolName !== 'Agent') {
       this.agents.broadcast({
         type: 'agentToolStart',
@@ -584,6 +593,7 @@ export class HookEventHandler {
         toolId: hookToolId,
         status,
         toolName,
+        detail,
       });
     }
     this.agents.broadcast({

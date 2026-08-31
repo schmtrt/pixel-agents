@@ -60,6 +60,7 @@ This fork extends upstream [`pixel-agents-hq/pixel-agents`](https://github.com/p
 - **OpenCode: only active agents stay in the office** — hooks-only sessions have no reliable `SessionEnd`, so an idle reaper removes agents that produced no hook event for 5 minutes; sessions that were already running before the server started are adopted via the plugin's first-contact announcement instead of expiring in the event buffer.
 - **OpenCode: no dangling session mappings after reap** — reaping now also clears the session→agent router entry, so a reaped agent's next event re-adopts it instead of being silently dropped.
 - **Model badges** — each character shows a colored badge for the model serving its session (Claude, Qwen, Gemini, ...). Claude reports it from its transcripts; OpenCode reports `provider/model` on turn end. New protocol message: `agentModel`.
+- **Agent details popup (terminal view)** — clicking a character opens a details window with its model (badge + raw id), full working directory, status, and a feed of the last 50 tool calls with untruncated inputs (full commands, paths, task descriptions). Server-side activity ring buffer re-sent on reconnect via the new `agentActivityLog` message; `agentToolStart` gained `detail`, `agentCreated`/`existingAgents` gained `cwd`.
 
 ## Where This Is Going
 

@@ -56,6 +56,11 @@ export interface AgentState {
    *  Shown as a badge in the office. */
   model?: string;
 
+  /** Bounded ring buffer (newest last) of recent tool calls, fed centrally by
+   *  AgentStateStore.broadcast. Drives the details popup's terminal feed;
+   *  re-sent to connecting clients as `agentActivityLog`. Transient. */
+  activityLog?: AgentActivityLogEntry[];
+
   // -- Context window usage (server/src/contextUsage.ts) --
   /** Tokens in the agent's context as of its newest turn; 0 until one is seen.
    *  A snapshot, not a running total -- it falls on compaction and /clear. */
@@ -94,6 +99,17 @@ export interface AgentState {
   palette?: number;
   /** Hue shift in degrees (0-360). Rotates the base palette colors. */
   hueShift?: number;
+}
+
+/** One tool call in an agent's activity ring buffer (see AgentState.activityLog).
+ *  Mirrors the AgentActivityEntry wire schema. */
+export interface AgentActivityLogEntry {
+  toolId: string;
+  toolName?: string;
+  status: string;
+  detail?: string;
+  done: boolean;
+  ts: number;
 }
 
 export interface PersistedAgent {

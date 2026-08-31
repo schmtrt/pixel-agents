@@ -86,6 +86,7 @@ components:
         - $ref: '#/components/schemas/ExistingAgents'
         # Agent status / tool activity
         - $ref: '#/components/schemas/AgentStatus'
+        - $ref: '#/components/schemas/AgentActivityLog'
         - $ref: '#/components/schemas/AgentToolStart'
         - $ref: '#/components/schemas/AgentToolDone'
         - $ref: '#/components/schemas/AgentToolsClear'
@@ -183,6 +184,9 @@ components:
           type: integer
         folderName:
           type: string
+        cwd:
+          type: string
+          description: Full working directory of the agent's session.
         isExternal:
           type: boolean
         palette:
@@ -238,6 +242,11 @@ components:
           description: Map of agent ID (string) to workspace folder name.
           additionalProperties:
             type: string
+        cwdPaths:
+          type: object
+          description: Map of agent ID (string) to the full working directory of the session.
+          additionalProperties:
+            type: string
         externalAgents:
           type: object
           description: Map of agent ID (string) to external flag.
@@ -283,6 +292,12 @@ components:
         status:
           type: string
           description: Human-readable status to display (e.g. "Reading foo.ts").
+        detail:
+          type: string
+          description: >-
+            Fuller human-readable rendering of the raw tool input (full command,
+            full file path, task description) for the agent details popup. Kept
+            off the status line so the overlay stays short.
         toolName:
           type: string
         permissionActive:
@@ -295,6 +310,45 @@ components:
             True when this spawn tool call carries a name, making the spawn a
             Teammate-to-be. The office must not create a Subtask sub-character
             for it — a teammate character will represent the spawn instead.
+
+    AgentActivityLog:
+      description: >-
+        Bounded ring buffer of the agent's recent tool calls (newest last).
+        Sent on client (re)connect so the details popup's terminal feed
+        survives webview reloads; live entries extend it via agentToolStart /
+        agentToolDone.
+      type: object
+      additionalProperties: false
+      required: [type, id, entries]
+      properties:
+        type:
+          const: agentActivityLog
+        id:
+          type: integer
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentActivityEntry'
+
+    AgentActivityEntry:
+      description: One tool call in an agent's activity log.
+      type: object
+      additionalProperties: false
+      required: [toolId, status, done, ts]
+      properties:
+        toolId:
+          type: string
+        toolName:
+          type: string
+        status:
+          type: string
+        detail:
+          type: string
+        done:
+          type: boolean
+        ts:
+          type: integer
+          description: Epoch ms when the tool call started.
 
     AgentToolDone:
       description: Agent finished executing a tool.
@@ -357,6 +411,8 @@ components:
         toolId:
           type: string
         status:
+          type: string
+        detail:
           type: string
 
     SubagentToolDone:

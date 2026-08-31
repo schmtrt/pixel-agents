@@ -36,6 +36,12 @@ export function resendAgentActivity(
       });
     }
 
+    // 1b. Recent tool feed (terminal view of the details popup). Sent before
+    // the live-tool replays below; the webview dedups live tools against it.
+    if (agent.activityLog && agent.activityLog.length > 0) {
+      send({ type: 'agentActivityLog', id, entries: agent.activityLog });
+    }
+
     // 2. Regular (non-background) tools
     for (const [toolId, status] of agent.activeToolStatuses) {
       // Skip background tools here — they're sent separately below with proper flags
